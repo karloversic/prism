@@ -17,6 +17,25 @@ $script:prismPath = try {
     (Get-ItemProperty "HKLM:\SOFTWARE\PRISM" -Name "InstallPath" -ErrorAction Stop).InstallPath
 } catch { "C:\PRISM" }
 
+# Launch a PRISM script without the console flash: wscript.exe (GUI subsystem)
+# creates the powershell console hidden from the first frame. Mode 'runas'
+# shows a UAC prompt; 'user' launches at the current integrity level.
+function Start-PrismScript {
+    param([string]$Mode, [string]$ScriptName, [string]$ExtraArgs = "")
+    $target = Join-Path $script:prismPath $ScriptName
+    $vbs    = Join-Path $script:prismPath "PRISM-Launch.vbs"
+    if (Test-Path $vbs) {
+        $argList = "`"$vbs`" $Mode `"$target`""
+        if ($ExtraArgs) { $argList += " $ExtraArgs" }
+        Start-Process wscript.exe -ArgumentList $argList
+    } else {
+        $psArgs = "-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File `"$target`""
+        if ($ExtraArgs) { $psArgs += " $ExtraArgs" }
+        if ($Mode -eq 'runas') { Start-Process powershell.exe -ArgumentList $psArgs -Verb RunAs }
+        else                   { Start-Process powershell.exe -ArgumentList $psArgs }
+    }
+}
+
 # Single-instance guard - exit silently if another PRISM tray process is running
 $script:mutex = New-Object System.Threading.Mutex($false, "PRISM-Tray-Singleton")
 $script:mutexAcquired = $false
@@ -259,30 +278,47 @@ function Get-PRISMRegProp {
     try { (Get-ItemProperty "HKLM:\SOFTWARE\PRISM" -Name $Name -ErrorAction Stop).$Name } catch { $null }
 }
 
+# Resolve the next monitor run; result is cached so the 1-second countdown
+# tick only redraws text instead of issuing a CIM query per second.
+$script:nextRunCache     = $null
+$script:timerIntervalMin = 8
+
+function Get-NextRunTime {
+    $intervalMin = [int](Get-PRISMRegProp "MonitoringInterval")
+    if (-not $intervalMin) { $intervalMin = 8 }
+    $script:timerIntervalMin = $intervalMin
+
+    $taskInfo = Get-ScheduledTaskInfo -TaskName "PRISM-Monitor" -ErrorAction SilentlyContinue
+    $nextRun  = $null
+    if ($taskInfo -and $taskInfo.NextRunTime) {
+        $candidate = [datetime]$taskInfo.NextRunTime
+        if ($candidate -gt [datetime]::Now) { $nextRun = $candidate }
+    }
+
+    # SYSTEM tasks aren't queryable from non-admin; estimate from LastRun registry value.
+    # Advance by full cycles so we always resolve to the next future trigger.
+    if (-not $nextRun) {
+        $lastRunStr = Get-PRISMRegProp "LastRun"
+        if ($lastRunStr) {
+            $lastRun     = [datetime]$lastRunStr
+            $intervalSec = $intervalMin * 60
+            $elapsedSec  = ([datetime]::Now - $lastRun).TotalSeconds
+            $cyclesDue   = [Math]::Floor($elapsedSec / $intervalSec)
+            $nextRun     = $lastRun.AddSeconds(($cyclesDue + 1) * $intervalSec)
+        }
+    }
+    return $nextRun
+}
+
 function Update-TimerText {
     try {
-        $intervalMin = [int](Get-PRISMRegProp "MonitoringInterval")
-        if (-not $intervalMin) { $intervalMin = 8 }
-
-        $taskInfo = Get-ScheduledTaskInfo -TaskName "PRISM-Monitor" -ErrorAction SilentlyContinue
-        $nextRun  = $null
-        if ($taskInfo -and $taskInfo.NextRunTime) {
-            $candidate = [datetime]$taskInfo.NextRunTime
-            if ($candidate -gt [datetime]::Now) { $nextRun = $candidate }
+        # Re-query only when there is no cached time or it has passed
+        # (the monitor just fired); otherwise the cached target is still valid.
+        if (-not $script:nextRunCache -or [datetime]::Now -ge $script:nextRunCache) {
+            $script:nextRunCache = Get-NextRunTime
         }
-
-        # SYSTEM tasks aren't queryable from non-admin; estimate from LastRun registry value.
-        # Advance by full cycles so we always resolve to the next future trigger.
-        if (-not $nextRun) {
-            $lastRunStr = Get-PRISMRegProp "LastRun"
-            if ($lastRunStr) {
-                $lastRun     = [datetime]$lastRunStr
-                $intervalSec = $intervalMin * 60
-                $elapsedSec  = ([datetime]::Now - $lastRun).TotalSeconds
-                $cyclesDue   = [Math]::Floor($elapsedSec / $intervalSec)
-                $nextRun     = $lastRun.AddSeconds(($cyclesDue + 1) * $intervalSec)
-            }
-        }
+        $intervalMin = $script:timerIntervalMin
+        $nextRun     = $script:nextRunCache
 
         if (-not $nextRun) {
             $timerItem.Text = "Next check: N/A"
@@ -368,20 +404,15 @@ $runNowItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $runNowItem.Text = "Run Monitor Now"
 $runNowItem.Add_Click({
     try {
+        # Works without UAC: deploy grants Authenticated Users start rights on the task
         Start-ScheduledTask -TaskName "PRISM-Monitor" -ErrorAction Stop
-        [System.Windows.Forms.MessageBox]::Show("PRISM-Monitor triggered.", "PRISM", `
-            [System.Windows.Forms.MessageBoxButtons]::OK, `
-            [System.Windows.Forms.MessageBoxIcon]::Information)
+        $script:nextRunCache = $null
+        $notifyIcon.ShowBalloonTip(3000, "PRISM", "Monitor check started.", [System.Windows.Forms.ToolTipIcon]::Info)
     } catch {
-        # Task missing or insufficient permissions - run PRISM.ps1 directly with elevation
+        # Task missing or rights not granted - run PRISM.ps1 elevated, flash-free
         try {
-            $prismScript = Join-Path $script:prismPath "PRISM.ps1"
-            Start-Process powershell.exe -ArgumentList `
-                "-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File `"$prismScript`" -Action Monitor" `
-                -Verb RunAs -ErrorAction Stop
-            [System.Windows.Forms.MessageBox]::Show("Monitor triggered.", "PRISM", `
-                [System.Windows.Forms.MessageBoxButtons]::OK, `
-                [System.Windows.Forms.MessageBoxIcon]::Information)
+            Start-PrismScript -Mode runas -ScriptName "PRISM.ps1" -ExtraArgs "-Action Monitor"
+            $notifyIcon.ShowBalloonTip(3000, "PRISM", "Monitor check started.", [System.Windows.Forms.ToolTipIcon]::Info)
         } catch {
             [System.Windows.Forms.MessageBox]::Show("Could not trigger monitor. Check Task Scheduler.", "PRISM", `
                 [System.Windows.Forms.MessageBoxButtons]::OK, `
@@ -410,9 +441,7 @@ $forceRecycleItem.Add_Click({
         [System.Windows.Forms.MessageBoxIcon]::Warning)
     if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
         try {
-            Start-Process powershell.exe -ArgumentList `
-                "-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File `"$prismScript`" -Action Format" `
-                -Verb RunAs -ErrorAction Stop
+            Start-PrismScript -Mode runas -ScriptName "PRISM.ps1" -ExtraArgs "-Action Format"
             $notifyIcon.ShowBalloonTip(5000, "PRISM", "Force recycle started - check logs for results.", [System.Windows.Forms.ToolTipIcon]::Info)
         } catch {
             [System.Windows.Forms.MessageBox]::Show(
@@ -436,13 +465,18 @@ $configItem.Add_Click({
         return
     }
     try {
-        # Launch hidden (no OS-level SW_HIDE so UAC works); Config self-elevates via UAC
-        Start-Process powershell.exe `
-            -ArgumentList "-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File `"$configPath`""
+        # The PRISM-Config task runs elevated (RunLevel Highest) without a UAC
+        # prompt and its wscript action creates the console pre-hidden - no flash.
+        Start-ScheduledTask -TaskName "PRISM-Config" -ErrorAction Stop
     } catch {
-        [System.Windows.Forms.MessageBox]::Show("Could not open configuration.", "PRISM", `
-            [System.Windows.Forms.MessageBoxButtons]::OK, `
-            [System.Windows.Forms.MessageBoxIcon]::Warning)
+        # Task missing - launch directly; Config self-elevates (one UAC prompt)
+        try {
+            Start-PrismScript -Mode user -ScriptName "PRISM-Config.ps1"
+        } catch {
+            [System.Windows.Forms.MessageBox]::Show("Could not open configuration.", "PRISM", `
+                [System.Windows.Forms.MessageBoxButtons]::OK, `
+                [System.Windows.Forms.MessageBoxIcon]::Warning)
+        }
     }
 })
 $contextMenu.Items.Add($configItem) | Out-Null
@@ -453,8 +487,7 @@ $contextMenu.Items.Add("-") | Out-Null
 $removeItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $removeItem.Text = "Remove PRISM..."
 $removeItem.Add_Click({
-    $stopScript = Join-Path $script:prismPath "PRISM-Stop.ps1"
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File `"$stopScript`"" -Verb RunAs
+    Start-PrismScript -Mode runas -ScriptName "PRISM-Stop.ps1"
 })
 $contextMenu.Items.Add($removeItem) | Out-Null
 
@@ -569,6 +602,7 @@ $script:refreshTimer.Add_Tick({
     $script:lastTaskCheck = [datetime]::Now
     $statusItem.Text = $script:lastTaskText
     Set-StatusColor
+    $script:nextRunCache = $null   # 60s refresh: pick up interval/schedule changes
     Update-TimerText
 
     # Mirror the status into the tray tooltip (NotifyIcon.Text caps at 63 chars)
@@ -584,6 +618,14 @@ $script:refreshTimer.Add_Tick({
     } catch {}
 })
 $script:refreshTimer.Start()
+
+# Live countdown: tick once per second while the context menu is open so the
+# "Next check" line counts down in place instead of freezing at its open value.
+$script:menuTimer = New-Object System.Windows.Forms.Timer
+$script:menuTimer.Interval = 1000
+$script:menuTimer.Add_Tick({ Update-TimerText })
+$contextMenu.Add_Opened({ $script:menuTimer.Start() })
+$contextMenu.Add_Closed({ $script:menuTimer.Stop() })
 
 # Form close handler - set icon invisible and release mutex here;
 # dispose the NotifyIcon object only after Application::Run returns (see below).

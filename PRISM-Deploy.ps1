@@ -52,8 +52,17 @@ try {
     Write-Host "[INFO] Creating PRISM-Config task..." -ForegroundColor Cyan
 
     $configScriptPath = Join-Path $InstallationPath "PRISM-Config.ps1"
-    $configAction     = New-ScheduledTaskAction -Execute "powershell.exe" `
-                            -Argument "-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File `"$configScriptPath`""
+    $launchVbsPath    = Join-Path $InstallationPath "PRISM-Launch.vbs"
+    # wscript shim instead of powershell.exe directly: Task Scheduler starting a
+    # console app shows a brief console flash even with -WindowStyle Hidden;
+    # wscript (GUI subsystem) creates the powershell console pre-hidden.
+    $configAction     = if (Test-Path $launchVbsPath) {
+                            New-ScheduledTaskAction -Execute "wscript.exe" `
+                                -Argument "`"$launchVbsPath`" user `"$configScriptPath`""
+                        } else {
+                            New-ScheduledTaskAction -Execute "powershell.exe" `
+                                -Argument "-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File `"$configScriptPath`""
+                        }
     # Battery flags here too: DisallowStartIfOnBatteries also blocks manual
     # Start-ScheduledTask, so without these the tray could not open the Config GUI
     # while the machine is on battery.
@@ -65,6 +74,30 @@ try {
     Register-ScheduledTask -TaskName "PRISM-Config" -InputObject $configTask -Force | Out-Null
 
     Write-Host "[OK] Task created: PRISM-Config (no UAC on launch)" -ForegroundColor Green
+
+    # Grant Authenticated Users read+start on both tasks. Without this the tasks
+    # are invisible to (and unstartable by) the non-elevated tray process, which
+    # forced a UAC fallback for "Run Monitor Now" and hid the real NextRunTime
+    # from the countdown display.
+    Write-Host "[INFO] Granting task start rights to standard users..." -ForegroundColor Cyan
+    try {
+        $sched = New-Object -ComObject "Schedule.Service"
+        $sched.Connect()
+        $taskFolder = $sched.GetFolder("\")
+        foreach ($tn in @("PRISM-Monitor", "PRISM-Config")) {
+            $comTask = $taskFolder.GetTask($tn)
+            $sddl = $comTask.GetSecurityDescriptor(4)   # 4 = DACL_SECURITY_INFORMATION
+            if ($sddl -notmatch ';;;AU\)') {
+                $ace = "(A;;GRGX;;;AU)"                 # generic read + execute for Authenticated Users
+                $sackIdx = $sddl.IndexOf("S:")          # keep any SACL section after the DACL ACEs
+                $newSddl = if ($sackIdx -ge 0) { $sddl.Insert($sackIdx, $ace) } else { $sddl + $ace }
+                $comTask.SetSecurityDescriptor($newSddl, 0)
+            }
+        }
+        Write-Host "[OK] Task rights granted" -ForegroundColor Green
+    } catch {
+        Write-Host "[WARNING] Could not grant task rights: $_ (tray will fall back to UAC)" -ForegroundColor Yellow
+    }
 
     Write-Host "[INFO] Setting up Registry..." -ForegroundColor Cyan
 

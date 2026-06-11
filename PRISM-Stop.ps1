@@ -1,9 +1,15 @@
 ﻿[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# Admin self-elevation
+# Admin self-elevation (via wscript shim when available: console is created
+# pre-hidden, so elevation does not flash a terminal window)
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File `"$PSCommandPath`"" -Verb RunAs
+    $launchVbs = Join-Path (Split-Path -Parent $PSCommandPath) "PRISM-Launch.vbs"
+    if (Test-Path $launchVbs) {
+        Start-Process wscript.exe -ArgumentList "`"$launchVbs`" runas `"$PSCommandPath`""
+    } else {
+        Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File `"$PSCommandPath`"" -Verb RunAs
+    }
     exit
 }
 
@@ -135,7 +141,7 @@ function New-ActionCard {
     $lblCardTitle.Font      = $FONT_BOLD
     $lblCardTitle.ForeColor = $TEXT_PRI
     $lblCardTitle.Location  = New-Object System.Drawing.Point(16, 11)
-    $lblCardTitle.Size      = New-Object System.Drawing.Size(300, 20)
+    $lblCardTitle.Size      = New-Object System.Drawing.Size(280, 20)
     $card.Controls.Add($lblCardTitle)
 
     # Status label (9pt, TEXT_SEC — e.g. "Monitoring: Active")
@@ -153,16 +159,17 @@ function New-ActionCard {
     $lblDesc.Font      = $FONT_SMALL
     $lblDesc.ForeColor = $TEXT_SEC
     $lblDesc.Location  = New-Object System.Drawing.Point(16, 52)
-    $lblDesc.Size      = New-Object System.Drawing.Size(300, 74)
+    $lblDesc.Size      = New-Object System.Drawing.Size(280, 74)
     $lblDesc.AutoSize  = $false
     $card.Controls.Add($lblDesc)
 
-    # Action button (right-aligned, vertically centred)
+    # Action button (right-aligned, vertically centred; right edge at 442
+    # leaves 12px padding inside the 454px inner card)
     $btn                              = New-Object System.Windows.Forms.Button
     $btn.Text                         = $ButtonText
-    $btn.Font                         = $FONT_SMALL
-    $btn.Location                     = New-Object System.Drawing.Point(330, 34)
-    $btn.Size                         = New-Object System.Drawing.Size(116, 46)
+    $btn.Font                         = $FONT_NORMAL
+    $btn.Location                     = New-Object System.Drawing.Point(312, 37)
+    $btn.Size                         = New-Object System.Drawing.Size(130, 40)
     $btn.FlatStyle                    = [System.Windows.Forms.FlatStyle]::Flat
     $btn.BackColor                    = $ButtonBg
     $btn.ForeColor                    = $ButtonFg
@@ -231,8 +238,8 @@ $btnCloseY = $card3Y + $CARD_H + $GAP   # 552
 $btnClose                              = New-Object System.Windows.Forms.Button
 $btnClose.Text                         = "Close"
 $btnClose.Font                         = $FONT_NORMAL
-$btnClose.Location                     = New-Object System.Drawing.Point(352, $btnCloseY)
-$btnClose.Size                         = New-Object System.Drawing.Size(116, 34)
+$btnClose.Location                     = New-Object System.Drawing.Point(368, $btnCloseY)
+$btnClose.Size                         = New-Object System.Drawing.Size(100, 36)
 $btnClose.FlatStyle                    = [System.Windows.Forms.FlatStyle]::Flat
 $btnClose.BackColor                    = $BG_CARD
 $btnClose.ForeColor                    = $TEXT_SEC

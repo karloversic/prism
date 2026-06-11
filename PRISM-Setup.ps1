@@ -68,13 +68,14 @@ function Run-Script {
 $alreadyInstalled = Test-Path "HKLM:\SOFTWARE\PRISM"
 $requiredFiles    = @(
     "PRISM.ps1","PRISM-Deploy.ps1","PRISM-CreateSDrive.ps1","PRISM-Config.ps1",
-    "PRISM-Stop.ps1","PRISM-Remove.ps1","PRISM-Remove.bat","PRISM-Tray.ps1","PRISM-Troubleshoot.bat"
+    "PRISM-Stop.ps1","PRISM-Remove.ps1","PRISM-Remove.bat","PRISM-Tray.ps1","PRISM-Troubleshoot.bat",
+    "PRISM-Launch.vbs"
 )
 $missingFiles = $requiredFiles | Where-Object { -not (Test-Path (Join-Path $script:USBPath $_)) }
 
 # ── Layout constants (all in client-area coordinates) ─────────────────────────
-# ClientSize = 580 x 590 so Size is approx 580 x 622 on Win11
-$CLIENT_W    = 580
+# Client width 480 matches PRISM-Config and PRISM-Stop.
+$CLIENT_W    = 480
 $CLIENT_H    = 590
 $HEADER_H    = 60
 $PANEL_Y     = $HEADER_H
@@ -134,13 +135,13 @@ $lblErrTitle           = New-Object System.Windows.Forms.Label
 $lblErrTitle.Font      = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $lblErrTitle.ForeColor = $DANGER
 $lblErrTitle.Location  = New-Object System.Drawing.Point(16, 12)
-$lblErrTitle.Size      = New-Object System.Drawing.Size(468, 22)
+$lblErrTitle.Size      = New-Object System.Drawing.Size(408, 22)
 
 $lblErrBody           = New-Object System.Windows.Forms.Label
 $lblErrBody.Font      = $FONT_SMALL
 $lblErrBody.ForeColor = $TEXT_SEC
 $lblErrBody.Location  = New-Object System.Drawing.Point(16, 38)
-$lblErrBody.Size      = New-Object System.Drawing.Size(468, 38)
+$lblErrBody.Size      = New-Object System.Drawing.Size(408, 38)
 
 $errCard.Controls.AddRange(@($lblErrTitle, $lblErrBody))
 
@@ -181,7 +182,7 @@ function New-Row {
     $lbl.Font      = $FONT_NORMAL
     $lbl.ForeColor = $TEXT_PRI
     $lbl.Location  = New-Object System.Drawing.Point(16, $Y)
-    $lbl.Size      = New-Object System.Drawing.Size(280, 22)
+    $lbl.Size      = New-Object System.Drawing.Size(260, 22)
     $lbl.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
 
     # Hint / description
@@ -190,11 +191,11 @@ function New-Row {
     $hint.Font      = $FONT_SMALL
     $hint.ForeColor = $TEXT_SEC
     $hint.Location  = New-Object System.Drawing.Point(16, ($Y + 22))
-    $hint.Size      = New-Object System.Drawing.Size(280, $script:HINT_H)
+    $hint.Size      = New-Object System.Drawing.Size(260, $script:HINT_H)
 
-    # Bordered wrapper
+    # Bordered wrapper; right edge at 424 (card-relative) leaves 16px padding
     $wrap           = New-Object System.Windows.Forms.Panel
-    $wrap.Location  = New-Object System.Drawing.Point(316, ($Y + 4))
+    $wrap.Location  = New-Object System.Drawing.Point(284, ($Y + 4))
     $wrap.Size      = New-Object System.Drawing.Size(140, 34)
     $wrap.BackColor = $BORDER
 
@@ -243,7 +244,7 @@ $lblInfoBody.Text      = "S: virtual drive (VHD)   C:\PRISM folder   PRISM-Monit
 $lblInfoBody.Font      = $FONT_SMALL
 $lblInfoBody.ForeColor = $TEXT_SEC
 $lblInfoBody.Location  = New-Object System.Drawing.Point(16, 44)
-$lblInfoBody.Size      = New-Object System.Drawing.Size(468, 44)
+$lblInfoBody.Size      = New-Object System.Drawing.Size(408, 44)
 
 $infoCard.Controls.AddRange(@($lblInfoTitle, $lblInfoBody))
 
@@ -257,7 +258,7 @@ $lblNote.Size      = New-Object System.Drawing.Size($CARD_W, $script:HINT_H)
 $lblNote.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
 
 # Buttons — y = 426 + HINT_H + 20 ≈ 460  → bottom = 460+42 = 502 < 530 (PANEL_H) ✓
-# Both buttons together span 190+20+200=410px; (580-410)/2=85 → centered
+# Both buttons together span 130+12+170=312px; (480-312)/2=84 → centered
 $btnBegin                              = New-Object System.Windows.Forms.Button
 $btnBegin.Text                         = "Begin Installation"
 $btnBegin.Font                         = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
@@ -265,8 +266,8 @@ $btnBegin.ForeColor                    = $BG
 $btnBegin.BackColor                    = $ACCENT
 $btnBegin.FlatStyle                    = [System.Windows.Forms.FlatStyle]::Flat
 $btnBegin.FlatAppearance.BorderSize    = 0
-$btnBegin.Location                     = New-Object System.Drawing.Point(295, 460)
-$btnBegin.Size                         = New-Object System.Drawing.Size(200, 42)
+$btnBegin.Location                     = New-Object System.Drawing.Point(226, 460)
+$btnBegin.Size                         = New-Object System.Drawing.Size(170, 42)
 $btnBegin.Cursor                       = [System.Windows.Forms.Cursors]::Hand
 
 $btnCancel                             = New-Object System.Windows.Forms.Button
@@ -277,8 +278,8 @@ $btnCancel.BackColor                   = $BG_CARD
 $btnCancel.FlatStyle                   = [System.Windows.Forms.FlatStyle]::Flat
 $btnCancel.FlatAppearance.BorderColor  = $BORDER
 $btnCancel.FlatAppearance.BorderSize   = 1
-$btnCancel.Location                    = New-Object System.Drawing.Point(85, 460)
-$btnCancel.Size                        = New-Object System.Drawing.Size(190, 42)
+$btnCancel.Location                    = New-Object System.Drawing.Point(84, 460)
+$btnCancel.Size                        = New-Object System.Drawing.Size(130, 42)
 $btnCancel.Cursor                      = [System.Windows.Forms.Cursors]::Hand
 
 $btnOpenRemove                             = New-Object System.Windows.Forms.Button
@@ -288,8 +289,8 @@ $btnOpenRemove.ForeColor                   = [System.Drawing.Color]::White
 $btnOpenRemove.BackColor                   = $DANGER
 $btnOpenRemove.FlatStyle                   = [System.Windows.Forms.FlatStyle]::Flat
 $btnOpenRemove.FlatAppearance.BorderSize   = 0
-$btnOpenRemove.Location                    = New-Object System.Drawing.Point(295, 460)
-$btnOpenRemove.Size                        = New-Object System.Drawing.Size(200, 42)
+$btnOpenRemove.Location                    = New-Object System.Drawing.Point(226, 460)
+$btnOpenRemove.Size                        = New-Object System.Drawing.Size(170, 42)
 $btnOpenRemove.Cursor                      = [System.Windows.Forms.Cursors]::Hand
 $btnOpenRemove.Visible                     = $false
 
@@ -305,7 +306,7 @@ $depPanel.Visible   = $false
 # rtb: y=16, h=390 → bottom=406
 $rtb              = New-Object System.Windows.Forms.RichTextBox
 $rtb.Location     = New-Object System.Drawing.Point(20, 16)
-$rtb.Size         = New-Object System.Drawing.Size(540, 390)
+$rtb.Size         = New-Object System.Drawing.Size(440, 390)
 $rtb.BackColor    = $BG_CARD
 $rtb.ForeColor    = $TEXT_PRI
 $rtb.Font         = $FONT_MONO
@@ -322,8 +323,8 @@ $btnClose.BackColor                    = $BG_CARD
 $btnClose.FlatStyle                    = [System.Windows.Forms.FlatStyle]::Flat
 $btnClose.FlatAppearance.BorderColor   = $BORDER
 $btnClose.FlatAppearance.BorderSize    = 1
-$btnClose.Location                     = New-Object System.Drawing.Point(360, 428)
-$btnClose.Size                         = New-Object System.Drawing.Size(200, 42)
+$btnClose.Location                     = New-Object System.Drawing.Point(290, 428)
+$btnClose.Size                         = New-Object System.Drawing.Size(170, 42)
 $btnClose.Enabled                      = $false
 $btnClose.Cursor                       = [System.Windows.Forms.Cursors]::Hand
 
@@ -367,7 +368,7 @@ if ($alreadyInstalled -or $missingFiles.Count -gt 0) {
         $lblErrBody.Text  = ($missingFiles -join ", ") + "`nAll PRISM files must be in the same folder as this installer."
         # Single centered Close button
         $btnCancel.Text     = "Close"
-        $btnCancel.Location = New-Object System.Drawing.Point(195, 460)
+        $btnCancel.Location = New-Object System.Drawing.Point(175, 460)
     }
 }
 
@@ -403,7 +404,8 @@ function Start-Deploy {
         $filesToCopy = @(
             "PRISM.ps1","PRISM-Deploy.ps1","PRISM-Setup.ps1","PRISM-Stop.ps1",
             "PRISM-Remove.ps1","PRISM-Remove.bat","PRISM-Config.ps1","PRISM-Tray.ps1",
-            "PRISM-CreateSDrive.ps1","PRISM-Troubleshoot.bat","prism-logo.ico","prism-logo.png"
+            "PRISM-CreateSDrive.ps1","PRISM-Troubleshoot.bat","PRISM-Launch.vbs",
+            "prism-logo.ico","prism-logo.png"
         )
         foreach ($f in $filesToCopy) {
             $src = Join-Path $usbPath $f
@@ -583,7 +585,12 @@ $btnClose.Add_Click({  $form.Close() })
 $btnOpenRemove.Add_Click({
     $stopScript = "C:\PRISM\PRISM-Stop.ps1"
     if (Test-Path $stopScript) {
-        Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File `"$stopScript`"" -Verb RunAs
+        $launchVbs = "C:\PRISM\PRISM-Launch.vbs"
+        if (Test-Path $launchVbs) {
+            Start-Process wscript.exe -ArgumentList "`"$launchVbs`" runas `"$stopScript`""
+        } else {
+            Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File `"$stopScript`"" -Verb RunAs
+        }
         $form.Close()
     } else {
         [System.Windows.Forms.MessageBox]::Show("PRISM-Stop.ps1 not found at C:\PRISM\", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)

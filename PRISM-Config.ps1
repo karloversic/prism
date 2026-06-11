@@ -1,9 +1,15 @@
 ﻿[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# Admin self-elevation
+# Admin self-elevation (via wscript shim when available: console is created
+# pre-hidden, so elevation does not flash a terminal window)
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File `"$PSCommandPath`"" -Verb RunAs
+    $launchVbs = Join-Path (Split-Path -Parent $PSCommandPath) "PRISM-Launch.vbs"
+    if (Test-Path $launchVbs) {
+        Start-Process wscript.exe -ArgumentList "`"$launchVbs`" runas `"$PSCommandPath`""
+    } else {
+        Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File `"$PSCommandPath`"" -Verb RunAs
+    }
     exit
 }
 
@@ -100,10 +106,12 @@ function Get-CFreGB {
     }
 }
 
-# Form — taller to accommodate hint rows under each setting
+# Form — taller to accommodate hint rows under each setting.
+# Client width 480 matches PRISM-Setup and PRISM-Stop; cards are x=12 w=456,
+# so the shared right edge for inputs/buttons is 468.
 $form = New-Object System.Windows.Forms.Form
 $form.Text            = "PRISM - Configuration"
-$form.ClientSize      = New-Object System.Drawing.Size(540, 670)
+$form.ClientSize      = New-Object System.Drawing.Size(480, 670)
 $form.StartPosition   = [System.Windows.Forms.FormStartPosition]::CenterScreen
 $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
 $form.MaximizeBox     = $false
@@ -118,7 +126,7 @@ if (Test-Path $_icoPath) { try { $form.Icon = New-Object System.Drawing.Icon($_i
 # === 1. Header bar (h=60, matches PRISM-Setup design) ===
 $headerPanel = New-Object System.Windows.Forms.Panel
 $headerPanel.Location  = New-Object System.Drawing.Point(0, 0)
-$headerPanel.Size      = New-Object System.Drawing.Size(540, 60)
+$headerPanel.Size      = New-Object System.Drawing.Size(480, 60)
 $headerPanel.BackColor = $BG_CARD
 $form.Controls.Add($headerPanel)
 
@@ -141,7 +149,7 @@ $headerPanel.Controls.Add($lblSub)
 # === 1b. Registry-missing warning banner (hidden by default) ===
 $warnBanner = New-Object System.Windows.Forms.Panel
 $warnBanner.Location  = New-Object System.Drawing.Point(12, 66)
-$warnBanner.Size      = New-Object System.Drawing.Size(516, 42)
+$warnBanner.Size      = New-Object System.Drawing.Size(456, 42)
 $warnBanner.BackColor = [System.Drawing.ColorTranslator]::FromHtml("#3d2b00")
 $warnBanner.Visible   = $false
 $form.Controls.Add($warnBanner)
@@ -157,7 +165,7 @@ $warnBanner.Controls.Add($lblWarnIcon)
 $lblWarnText = New-Object System.Windows.Forms.Label
 $lblWarnText.Text      = "PRISM registry not found - is PRISM installed? Settings cannot be saved."
 $lblWarnText.Location  = New-Object System.Drawing.Point(32, 12)
-$lblWarnText.Size      = New-Object System.Drawing.Size(478, $script:HINT_H)
+$lblWarnText.Size      = New-Object System.Drawing.Size(418, $script:HINT_H)
 $lblWarnText.ForeColor = $WARNING
 $lblWarnText.Font      = $FONT_SMALL
 $warnBanner.Controls.Add($lblWarnText)
@@ -168,13 +176,13 @@ $statusY = 62   # default; bumped to 108 if banner shown
 
 $statusOuter = New-Object System.Windows.Forms.Panel
 $statusOuter.Location  = New-Object System.Drawing.Point(12, $statusY)
-$statusOuter.Size      = New-Object System.Drawing.Size(516, 112)
+$statusOuter.Size      = New-Object System.Drawing.Size(456, 112)
 $statusOuter.BackColor = $BORDER
 $form.Controls.Add($statusOuter)
 
 $statusCard = New-Object System.Windows.Forms.Panel
 $statusCard.Location  = New-Object System.Drawing.Point(1, 1)
-$statusCard.Size      = New-Object System.Drawing.Size(514, 110)
+$statusCard.Size      = New-Object System.Drawing.Size(454, 110)
 $statusCard.BackColor = $BG_CARD
 $statusOuter.Controls.Add($statusCard)
 
@@ -204,8 +212,8 @@ $statusCard.Controls.Add($lblDriveStatus)
 
 $lblUsage = New-Object System.Windows.Forms.Label
 $lblUsage.Text      = ""
-$lblUsage.Location  = New-Object System.Drawing.Point(200, 34)
-$lblUsage.Size      = New-Object System.Drawing.Size(300, 20)
+$lblUsage.Location  = New-Object System.Drawing.Point(182, 34)
+$lblUsage.Size      = New-Object System.Drawing.Size(260, 20)
 $lblUsage.ForeColor = $TEXT_PRI
 $lblUsage.Font      = $FONT_SMALL
 $lblUsage.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
@@ -213,7 +221,7 @@ $statusCard.Controls.Add($lblUsage)
 
 $pbContainer = New-Object System.Windows.Forms.Panel
 $pbContainer.Location  = New-Object System.Drawing.Point(12, 68)
-$pbContainer.Size      = New-Object System.Drawing.Size(490, 10)
+$pbContainer.Size      = New-Object System.Drawing.Size(430, 10)
 $pbContainer.BackColor = $BG_INPUT
 $statusCard.Controls.Add($pbContainer)
 
@@ -226,7 +234,7 @@ $pbContainer.Controls.Add($pbFill)
 $lblDriveOfflineHint = New-Object System.Windows.Forms.Label
 $lblDriveOfflineHint.Text      = "S: drive is not mounted. Resize and save operations are disabled."
 $lblDriveOfflineHint.Location  = New-Object System.Drawing.Point(12, 84)
-$lblDriveOfflineHint.Size      = New-Object System.Drawing.Size(490, 18)
+$lblDriveOfflineHint.Size      = New-Object System.Drawing.Size(430, 18)
 $lblDriveOfflineHint.ForeColor = $DANGER
 $lblDriveOfflineHint.Font      = $FONT_SMALL
 $lblDriveOfflineHint.Visible   = $false
@@ -304,9 +312,10 @@ function New-SettingsRow {
     $hint.Font      = $FONT_SMALL
     $form.Controls.Add($hint)
 
-    # Bordered wrapper (matches installer style)
+    # Bordered wrapper (matches installer style); right edge at 468 aligns
+    # with the card edge above
     $wrap = New-Object System.Windows.Forms.Panel
-    $wrap.Location  = New-Object System.Drawing.Point(320, ($Y + 2))
+    $wrap.Location  = New-Object System.Drawing.Point(328, ($Y + 2))
     $wrap.Size      = New-Object System.Drawing.Size(140, 34)
     $wrap.BackColor = $BORDER
     $form.Controls.Add($wrap)
@@ -336,7 +345,7 @@ $intervalUpDown = New-SettingsRow -LabelText "Monitor interval (min)" -HintText 
 $lblHint = New-Object System.Windows.Forms.Label
 $lblHint.Text      = "Changes apply on the next monitor cycle after saving."
 $lblHint.Location  = New-Object System.Drawing.Point(28, ($row1Y + 168))
-$lblHint.Size      = New-Object System.Drawing.Size(490, $script:HINT_H)
+$lblHint.Size      = New-Object System.Drawing.Size(430, $script:HINT_H)
 $lblHint.ForeColor = $TEXT_DIM
 $lblHint.Font      = $FONT_SMALL
 $form.Controls.Add($lblHint)
@@ -349,7 +358,7 @@ $resizeSepY = $row1Y + 192
 
 $sepLine = New-Object System.Windows.Forms.Panel
 $sepLine.Location  = New-Object System.Drawing.Point(12, $resizeSepY)
-$sepLine.Size      = New-Object System.Drawing.Size(516, 1)
+$sepLine.Size      = New-Object System.Drawing.Size(456, 1)
 $sepLine.BackColor = $BORDER
 $form.Controls.Add($sepLine)
 
@@ -368,7 +377,7 @@ $driveSizeUpDown = New-SettingsRow -LabelText "Drive size (GB)" -HintText "Curre
 $lblResizeDesc = New-Object System.Windows.Forms.Label
 $lblResizeDesc.Text      = ""
 $lblResizeDesc.Location  = New-Object System.Drawing.Point(16, ($resizeSepY + 90))
-$lblResizeDesc.Size      = New-Object System.Drawing.Size(380, 36)
+$lblResizeDesc.Size      = New-Object System.Drawing.Size(316, 36)
 $lblResizeDesc.ForeColor = $TEXT_SEC
 $lblResizeDesc.Font      = $FONT_SMALL
 $lblResizeDesc.Visible   = $false
@@ -376,7 +385,7 @@ $form.Controls.Add($lblResizeDesc)
 
 $btnApplyResize = New-Object System.Windows.Forms.Button
 $btnApplyResize.Text      = "Resize Drive"
-$btnApplyResize.Location  = New-Object System.Drawing.Point(400, ($resizeSepY + 90))
+$btnApplyResize.Location  = New-Object System.Drawing.Point(340, ($resizeSepY + 90))
 $btnApplyResize.Size      = New-Object System.Drawing.Size(128, 36)
 $btnApplyResize.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnApplyResize.BackColor = $TEXT_DIM
@@ -586,7 +595,7 @@ $btnRowY = $resizeSepY + 136
 
 $btnSave = New-Object System.Windows.Forms.Button
 $btnSave.Text      = "Save Settings"
-$btnSave.Location  = New-Object System.Drawing.Point(256, $btnRowY)
+$btnSave.Location  = New-Object System.Drawing.Point(200, $btnRowY)
 $btnSave.Size      = New-Object System.Drawing.Size(160, 36)
 $btnSave.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnSave.BackColor = $ACCENT
@@ -597,7 +606,7 @@ $form.Controls.Add($btnSave)
 
 $btnClose = New-Object System.Windows.Forms.Button
 $btnClose.Text      = "Close"
-$btnClose.Location  = New-Object System.Drawing.Point(428, $btnRowY)
+$btnClose.Location  = New-Object System.Drawing.Point(368, $btnRowY)
 $btnClose.Size      = New-Object System.Drawing.Size(100, 36)
 $btnClose.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnClose.BackColor = $BG_INPUT
@@ -608,7 +617,7 @@ $btnClose.FlatAppearance.BorderColor = $BORDER
 $form.Controls.Add($btnClose)
 
 # Adjust form height to snugly fit all content
-$form.ClientSize = New-Object System.Drawing.Size(540, ($btnRowY + 56))
+$form.ClientSize = New-Object System.Drawing.Size(480, ($btnRowY + 56))
 
 $btnSave.Add_Click({
     if (-not (Test-Path $_regPath)) {
