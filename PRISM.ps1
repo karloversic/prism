@@ -10,6 +10,21 @@
 $ErrorActionPreference = "Continue"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+# Registry-backed settings (HKLM:\SOFTWARE\PRISM) fill any parameter the caller
+# did not pass explicitly; an explicit parameter always wins. TargetDrive and
+# InstallPath are honored here so editing the registry directly works as documented.
+$script:InstallPath = "C:\PRISM"
+$regPath = "HKLM:\SOFTWARE\PRISM"
+if (Test-Path $regPath) {
+    $reg = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
+    if (-not $PSBoundParameters.ContainsKey('TargetDrive')       -and $reg.TargetDrive)                { $TargetDrive       = [string]$reg.TargetDrive }
+    if (-not $PSBoundParameters.ContainsKey('CapacityThreshold') -and $null -ne $reg.CapacityThreshold) { $CapacityThreshold = [int]$reg.CapacityThreshold }
+    if (-not $PSBoundParameters.ContainsKey('PreserveFolders')   -and $null -ne $reg.PreserveFolders)   { $PreserveFolders   = [int]$reg.PreserveFolders }
+    if (-not $PSBoundParameters.ContainsKey('LogsPath')          -and $reg.LogsPath)                   { $LogsPath          = [string]$reg.LogsPath }
+    if ($reg.InstallPath) { $script:InstallPath = [string]$reg.InstallPath }
+}
+$VHDPath = Join-Path $script:InstallPath "PRISM.vhd"
+
 $FormatLogsDirectory = "$LogsPath\format-logs"
 $MarkerFile = "${TargetDrive}\target.marker"
 
@@ -203,21 +218,12 @@ Initialize-Logging
 switch($Action) {
     'Monitor' {
         Write-Log "=== PRISM Monitoring Cycle Started ===" "INFO"
-
-        $regPath = "HKLM:\SOFTWARE\PRISM"
-        if (Test-Path $regPath) {
-            $regThreshold = (Get-ItemProperty -Path $regPath -Name "CapacityThreshold" -ErrorAction SilentlyContinue).CapacityThreshold
-            $regPreserve   = (Get-ItemProperty -Path $regPath -Name "PreserveFolders"   -ErrorAction SilentlyContinue).PreserveFolders
-            if ($null -ne $regThreshold) { $CapacityThreshold = [int]$regThreshold }
-            if ($null -ne $regPreserve)  { $PreserveFolders   = [int]$regPreserve  }
-            Write-Log "Config loaded from registry: Threshold=$CapacityThreshold%, PreserveFolders=$PreserveFolders" "INFO"
-        }
+        Write-Log "Effective config: Threshold=$CapacityThreshold%, PreserveFolders=$PreserveFolders, TargetDrive=$TargetDrive" "INFO"
 
         if(-not(Test-DriveLetter $TargetDrive)) {
-            $vhdPath = "C:\PRISM\PRISM.vhd"
-            if(Test-Path $vhdPath) {
+            if(Test-Path $VHDPath) {
                 Write-Log "$TargetDrive drive offline - attempting to remount VHD" "WARNING"
-                $mounted = Mount-PRISMDrive -VHDPath $vhdPath -DriveLetter ($TargetDrive -replace ':','')
+                $mounted = Mount-PRISMDrive -VHDPath $VHDPath -DriveLetter ($TargetDrive -replace ':','')
                 if(-not $mounted) {
                     Write-Log "Failed to remount VHD - check Disk Management" "ERROR"
                     Write-Log "=== Monitoring Cycle Complete ===" "INFO"
@@ -226,7 +232,7 @@ switch($Action) {
                 }
                 Write-Log "$TargetDrive drive remounted successfully" "SUCCESS"
             } else {
-                Write-Log "$TargetDrive drive not found - use PRISM-CreateSDrive.ps1 to create it" "WARNING"
+                Write-Log "$TargetDrive drive not found and no VHD at $VHDPath - use PRISM-CreateSDrive.ps1 to create it" "WARNING"
                 Write-Log "=== Monitoring Cycle Complete ===" "INFO"
                 Set-RunStatus "DriveError"
                 exit 0
@@ -312,26 +318,19 @@ switch($Action) {
     }
     'Format' {
         Write-Log "=== PRISM Format (Forced Recycle) Started ===" "INFO"
-
-        $regPath = "HKLM:\SOFTWARE\PRISM"
-        if (Test-Path $regPath) {
-            $regPreserve = (Get-ItemProperty -Path $regPath -Name "PreserveFolders" -ErrorAction SilentlyContinue).PreserveFolders
-            if ($null -ne $regPreserve) { $PreserveFolders = [int]$regPreserve }
-            Write-Log "Config loaded from registry: PreserveFolders=$PreserveFolders" "INFO"
-        }
+        Write-Log "Effective config: PreserveFolders=$PreserveFolders, TargetDrive=$TargetDrive" "INFO"
 
         if (-not (Test-DriveLetter $TargetDrive)) {
-            $vhdPath = "C:\PRISM\PRISM.vhd"
-            if (Test-Path $vhdPath) {
+            if (Test-Path $VHDPath) {
                 Write-Log "$TargetDrive drive offline - attempting to remount VHD" "WARNING"
-                $mounted = Mount-PRISMDrive -VHDPath $vhdPath -DriveLetter ($TargetDrive -replace ':','')
+                $mounted = Mount-PRISMDrive -VHDPath $VHDPath -DriveLetter ($TargetDrive -replace ':','')
                 if (-not $mounted) {
                     Write-Log "Failed to remount VHD - cannot run recycle" "ERROR"
                     exit 1
                 }
                 Write-Log "$TargetDrive drive remounted successfully" "SUCCESS"
             } else {
-                Write-Log "$TargetDrive drive not found and no VHD at $vhdPath" "ERROR"
+                Write-Log "$TargetDrive drive not found and no VHD at $VHDPath" "ERROR"
                 exit 1
             }
         }
