@@ -25,6 +25,27 @@ if (Test-Path $regPath) {
 }
 $VHDPath = Join-Path $script:InstallPath "PRISM.vhd"
 
+# License gate: Monitor and Format require a valid scriptmasters.dev license.
+# The check is offline against the cached signed token (HKLM:\SOFTWARE\PRISM\license)
+# and only goes online for a heartbeat when the grace period has expired.
+# Fails closed: a missing PRISM-License.ps1 is treated as an invalid license.
+$script:LicenseLib = Join-Path $PSScriptRoot "PRISM-License.ps1"
+function Assert-PrismLicense {
+    if (-not (Test-Path $script:LicenseLib)) {
+        Write-Log "PRISM-License.ps1 not found beside PRISM.ps1 - cannot verify license" "ERROR"
+        return $false
+    }
+    . $script:LicenseLib
+    $lic = Update-PrismLicense
+    if ($lic.Valid) {
+        Write-Log "License: $($lic.Message)" "INFO"
+        return $true
+    }
+    Write-Log "License check failed [$($lic.Status)]: $($lic.Message)" "ERROR"
+    Write-Log "Re-run the PRISM installer to activate, or contact support@scriptmasters.dev" "ERROR"
+    return $false
+}
+
 $FormatLogsDirectory = "$LogsPath\format-logs"
 $MarkerFile = "${TargetDrive}\target.marker"
 
@@ -220,6 +241,12 @@ switch($Action) {
         Write-Log "=== PRISM Monitoring Cycle Started ===" "INFO"
         Write-Log "Effective config: Threshold=$CapacityThreshold%, PreserveFolders=$PreserveFolders, TargetDrive=$TargetDrive" "INFO"
 
+        if (-not (Assert-PrismLicense)) {
+            Set-RunStatus "LicenseError"
+            Write-Log "=== Monitoring Cycle Complete ===" "INFO"
+            exit 0
+        }
+
         if(-not(Test-DriveLetter $TargetDrive)) {
             if(Test-Path $VHDPath) {
                 Write-Log "$TargetDrive drive offline - attempting to remount VHD" "WARNING"
@@ -276,6 +303,16 @@ switch($Action) {
         Write-Host ""
         Write-Host "PRISM Status Report" -ForegroundColor Cyan
         Write-Host ""
+
+        if (Test-Path $script:LicenseLib) {
+            . $script:LicenseLib
+            $licStatus = Test-PrismLicenseSilent
+            if ($licStatus[0]) {
+                Write-Host "License: $($licStatus[1])" -ForegroundColor Green
+            } else {
+                Write-Host "License: needs online verification or activation" -ForegroundColor Yellow
+            }
+        }
         Write-Host "Target Drive: $TargetDrive"
 
         if(Test-DriveLetter $TargetDrive) {
@@ -319,6 +356,10 @@ switch($Action) {
     'Format' {
         Write-Log "=== PRISM Format (Forced Recycle) Started ===" "INFO"
         Write-Log "Effective config: PreserveFolders=$PreserveFolders, TargetDrive=$TargetDrive" "INFO"
+
+        if (-not (Assert-PrismLicense)) {
+            exit 1
+        }
 
         if (-not (Test-DriveLetter $TargetDrive)) {
             if (Test-Path $VHDPath) {

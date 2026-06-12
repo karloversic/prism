@@ -11,7 +11,7 @@ It creates a 50GB virtual S: drive with automatic capacity monitoring and a `tar
 ## 3 Steps to Deploy
 
 ### Step 1: Download Files
-Download all **13 files** to the same folder (e.g., D:\PRISM-Deploy):
+Download all **14 files** to the same folder (e.g., D:\PRISM-Deploy):
 - PRISM-Deploy.bat
 - PRISM-Remove.bat
 - PRISM-Troubleshoot.bat
@@ -22,6 +22,7 @@ Download all **13 files** to the same folder (e.g., D:\PRISM-Deploy):
 - PRISM-Remove.ps1
 - PRISM-Config.ps1
 - PRISM-Tray.ps1
+- PRISM-License.ps1
 - PRISM-Quick-Start.md
 - README.md
 - S-DRIVE-MARKER-GUIDE.md
@@ -29,6 +30,7 @@ Download all **13 files** to the same folder (e.g., D:\PRISM-Deploy):
 ### Step 2: Run Deployment
 Double-click **PRISM-Deploy.bat**
 - Click "Yes" when asked for Administrator
+- Enter your license key (purchase at scriptmasters.dev)
 - Wait 5 minutes
 - Everything is automatic!
 
@@ -52,6 +54,7 @@ Check Windows File Explorer:
 - PowerShell 5.0 or higher
 - Administrator account
 - **55GB free on C: drive** ⚠️
+- License key from **scriptmasters.dev** (internet required for activation)
 
 ## Troubleshooting
 

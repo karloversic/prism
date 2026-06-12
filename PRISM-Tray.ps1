@@ -585,9 +585,10 @@ $script:refreshTimer.Add_Tick({
                 $minutesAgo = ([datetime]::Now - [datetime]$lastRunStr).TotalMinutes
                 if ($minutesAgo -le ($intervalMin * 2 + 5)) {
                     $script:lastTaskText = switch ($lastResult) {
-                        "Recycled"   { "Status: Recycled" }
-                        "DriveError" { "Status: Drive Error" }
-                        default      { "Status: Ready" }
+                        "Recycled"     { "Status: Recycled" }
+                        "DriveError"   { "Status: Drive Error" }
+                        "LicenseError" { "Status: License Error" }
+                        default        { "Status: Ready" }
                     }
                 } else {
                     $script:lastTaskText = "Status: Stale ($([int]$minutesAgo)m ago)"

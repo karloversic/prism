@@ -69,7 +69,7 @@ $alreadyInstalled = Test-Path "HKLM:\SOFTWARE\PRISM"
 $requiredFiles    = @(
     "PRISM.ps1","PRISM-Deploy.ps1","PRISM-CreateSDrive.ps1","PRISM-Config.ps1",
     "PRISM-Stop.ps1","PRISM-Remove.ps1","PRISM-Remove.bat","PRISM-Tray.ps1","PRISM-Troubleshoot.bat",
-    "PRISM-Launch.vbs"
+    "PRISM-Launch.vbs","PRISM-License.ps1"
 )
 $missingFiles = $requiredFiles | Where-Object { -not (Test-Path (Join-Path $script:USBPath $_)) }
 
@@ -393,6 +393,22 @@ function Start-Deploy {
     Add-Sep
     Add-Log ""
 
+    # Step 0: license activation (scriptmasters.dev). The monitor refuses to run
+    # without a valid cached token, so installing unactivated would be useless.
+    Add-Step "Checking license"
+    . (Join-Path $usbPath "PRISM-License.ps1")
+    $lic = Update-PrismLicense
+    if ($lic.Valid) {
+        Add-OK "License: $($lic.Message)"
+    } elseif (Show-PrismActivation -Owner $form) {
+        Add-OK "License activated and bound to this computer"
+    } else {
+        Add-Err "License activation is required to install PRISM"
+        Add-Err "Purchase a key at scriptmasters.dev, then run the installer again"
+        Finish-Deploy $false
+        return
+    }
+
     # Step 1: folders + files
     Add-Step "Creating installation folder and copying files"
     try {
@@ -405,7 +421,7 @@ function Start-Deploy {
             "PRISM.ps1","PRISM-Deploy.ps1","PRISM-Setup.ps1","PRISM-Stop.ps1",
             "PRISM-Remove.ps1","PRISM-Remove.bat","PRISM-Config.ps1","PRISM-Tray.ps1",
             "PRISM-CreateSDrive.ps1","PRISM-Troubleshoot.bat","PRISM-Launch.vbs",
-            "prism-logo.ico","prism-logo.png"
+            "PRISM-License.ps1","prism-logo.ico","prism-logo.png"
         )
         foreach ($f in $filesToCopy) {
             $src = Join-Path $usbPath $f

@@ -35,7 +35,7 @@ PRISM is a complete system for:
 ✅ Daily log files
 ✅ Operation logs
 
-## Files Included (13 Total)
+## Files Included (14 Total)
 
 ### Deployment (3 Batch Files)
 1. **PRISM-Deploy.bat** - Main deployment (run this!)
@@ -57,30 +57,34 @@ PRISM is a complete system for:
 9. **PRISM-Config.ps1** - Configuration GUI
 10. **PRISM-Tray.ps1** - System tray icon
 
+### Licensing (1 PowerShell Script)
+11. **PRISM-License.ps1** - License activation and verification (scriptmasters.dev)
+
 ### Documentation (3 Markdown Files)
-11. **PRISM-Quick-Start.md** - 60-second setup
-12. **README.md** - This file (complete reference)
-13. **S-DRIVE-MARKER-GUIDE.md** - Technical details
+12. **PRISM-Quick-Start.md** - 60-second setup
+13. **README.md** - This file (complete reference)
+14. **S-DRIVE-MARKER-GUIDE.md** - Technical details
 
 ## Quick Start
 
 ### Installation (3 Steps)
 
-**Step 1:** Download all 12 files to same folder
+**Step 1:** Download all 14 files to same folder
 **Step 2:** Double-click PRISM-Deploy.bat
-**Step 3:** Wait 5 minutes, done!
+**Step 3:** Enter your license key when prompted, wait 5 minutes, done!
 
 ### What Happens Automatically
 
 1. Administrator elevation
 2. File validation
-3. C:\PRISM folder creation
-4. Script copying
-5. S: drive creation (50GB)
-6. target.marker creation
-7. Task Scheduler setup
-8. Registry configuration
-9. Monitoring starts
+3. License activation (enter your scriptmasters.dev key)
+4. C:\PRISM folder creation
+5. Script copying
+6. S: drive creation (50GB)
+7. target.marker creation
+8. Task Scheduler setup
+9. Registry configuration
+10. Monitoring starts
 
 ## System Requirements
 
@@ -89,6 +93,7 @@ PRISM is a complete system for:
 - PowerShell 5.0 or higher
 - Administrator account
 - 55GB free on C: drive
+- License key from scriptmasters.dev (internet required for activation and periodic verification)
 
 ### Recommended
 - Windows 10 or higher
