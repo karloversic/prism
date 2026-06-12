@@ -1,0 +1,6 @@
+# Generated customer bundles (built by build_customer_bundle.ps1)
+for_customers/
+
+# OS
+.DS_Store
+Thumbs.db

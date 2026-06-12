@@ -43,6 +43,7 @@ After deploy, PRISM runs automatically every 8 minutes. Files are installed to `
 | `PRISM-Remove.ps1` | Complete removal (unregisters task, deletes files, cleans registry) |
 | `PRISM-Remove.bat` | Menu-driven removal |
 | `PRISM-Troubleshoot.bat` | 9-option diagnostic tool |
+| `build_customer_bundle.ps1` | Owner tool (not shipped): stages `for_customers\PRISM` + zip with the DEV-BYPASS block stripped from PRISM-License.ps1 |
 
 ---
 
@@ -92,7 +93,7 @@ PRISM is licensed via **scriptmasters.dev** (same server and RSA key pair as SET
 - **Token cache:** `HKLM:\SOFTWARE\PRISM\license` (`signed_token` is authoritative; `key_hash`, `usb_vsn`, `grace_expiry` are convenience copies)
 - **Activation:** WinForms dialog (`Show-PrismActivation`) shown by `PRISM-Setup.ps1` as install step 0
 - **Enforcement:** `PRISM.ps1` gates `Monitor` and `Format` via `Update-PrismLicense` (never prompts: offline RSA verify → heartbeat on grace expiry → fail closed). Tray shows "License Error" status via the `LastResult` registry value.
-- **Dev bypass:** `PRISM_LOCAL_DEV=1` env var (marked with `>>> DEV-BYPASS` comments for stripping from customer builds)
+- **Dev bypass:** `PRISM_LOCAL_DEV=1` env var (marked with `>>> DEV-BYPASS` comments; `build_customer_bundle.ps1` strips it and refuses to build if any reference survives — always ship customers the `for_customers\` bundle, never the repo copy)
 - **Removal:** `PRISM-Remove.ps1` deletes `HKLM:\SOFTWARE\PRISM` recursively, which also clears the licence cache; re-activation on the same machine with the same key succeeds (server returns a fresh token for the bound VSN).
 
 ---
