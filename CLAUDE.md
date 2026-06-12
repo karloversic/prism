@@ -88,7 +88,7 @@ Adjust via `PRISM-Config.ps1` GUI or edit registry directly.
 
 PRISM is licensed via **scriptmasters.dev** (same server and RSA key pair as SETup and WKFusion; API host `script-masters-olive.vercel.app`, product id `prism`).
 
-- **Binding:** system drive volume serial number (machine-bound, like WKFusion — not USB-bound like SETup)
+- **Binding:** system drive volume serial number (machine-bound, like WKFusion — not USB-bound like SETup). One licence covers up to `maxSeats` PCs (multi-seat; each PC claims a seat in the server's `license_seats` table; over-limit activation returns `SEATS_EXHAUSTED`)
 - **Token cache:** `HKLM:\SOFTWARE\PRISM\license` (`signed_token` is authoritative; `key_hash`, `usb_vsn`, `grace_expiry` are convenience copies)
 - **Activation:** WinForms dialog (`Show-PrismActivation`) shown by `PRISM-Setup.ps1` as install step 0
 - **Enforcement:** `PRISM.ps1` gates `Monitor` and `Format` via `Update-PrismLicense` (never prompts: offline RSA verify → heartbeat on grace expiry → fail closed). Tray shows "License Error" status via the `LastResult` registry value.

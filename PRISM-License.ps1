@@ -222,6 +222,7 @@ $script:_PrismErrMsg = @{
     EXPIRED              = "This license has expired."
     RUNS_EXHAUSTED       = "All runs on this license have been used."
     ALREADY_BOUND        = "This key is already bound to a different computer."
+    SEATS_EXHAUSTED      = "All PC seats on this license are in use. Contact sales to add seats."
     INVALID_REQUEST      = "Invalid key format. Expected: XXXX-XXXX-XXXX-XXXX"
     UNAUTHORIZED         = "License not recognized."
     SUBSCRIPTION_EXPIRED = "Subscription has expired."
@@ -390,7 +391,7 @@ function Show-PrismActivation {
     $lblInfo.Size      = New-Object System.Drawing.Size(380, 42)
 
     $lblBind           = New-Object System.Windows.Forms.Label
-    $lblBind.Text      = "IMPORTANT: the license will be permanently locked to this computer (system drive VSN $vsn). Only ONE computer can be active per license."
+    $lblBind.Text      = "IMPORTANT: this computer (system drive VSN $vsn) will claim one PC seat on the license. A license covers a fixed number of PCs - one seat per computer."
     $lblBind.Font      = New-Object System.Drawing.Font("Segoe UI", 9)
     $lblBind.ForeColor = $TEXT_SEC
     $lblBind.Location  = New-Object System.Drawing.Point(20, 114)
@@ -473,7 +474,8 @@ function Show-PrismActivation {
                 return
             }
             $lblStatus.ForeColor = $SUCCESS
-            $lblStatus.Text      = "Activated! License bound to this computer."
+            $seatInfo = if ($resp.max_seats -and [int]$resp.max_seats -gt 1) { " (seat $($resp.seats_used) of $($resp.max_seats))" } else { "" }
+            $lblStatus.Text      = "Activated! License bound to this computer$seatInfo."
             $dlg.DialogResult    = [System.Windows.Forms.DialogResult]::OK
             $dlg.Close()
             return
